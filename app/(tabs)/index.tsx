@@ -1,98 +1,243 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import { addFavorite, Favorite, fetchFavorite } from "@/api/favoritesAPI";
+import { fetchProducts, Product } from "@/api/productsAPI";
+import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
+import { useFocusEffect, useRouter } from "expo-router";
+import React, { useCallback, useState } from "react";
+import {
+  FlatList,
+  Image,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
-import { HelloWave } from '@/components/hello-wave';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Link } from 'expo-router';
-
-export default function HomeScreen() {
-  return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction title="Action" icon="cube" onPress={() => alert('Action pressed')} />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert('Share pressed')}
-            />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert('Delete pressed')}
-              />
-            </Link.Menu>
-          </Link.Menu>
-        </Link>
-
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+const HomePage = () => {
+  const router = useRouter();
+  const [selectedBrand, setSelectedBrand] = useState<string | null>(null);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [favoritesFromServer, setFavoritesFromServer] = useState<Favorite[]>(
+    []
   );
-}
+
+  const brands = Array.from(new Set(products.map((p) => p.brand)));
+
+  // Fetch products và favorites khi tab focus
+  useFocusEffect(
+    useCallback(() => {
+      const fetchAll = async () => {
+        try {
+          const productsData = await fetchProducts();
+          setProducts(productsData.filter((p) => p.price > 0));
+
+          const favs = await fetchFavorite();
+          setFavoritesFromServer(favs);
+        } catch (error) {
+          console.error(error);
+        }
+      };
+      fetchAll();
+    }, [])
+  );
+
+  const chooseFavorite = async (favorite: {
+    id: string;
+    artName: string;
+    price: number;
+    description: string;
+    image: string;
+    brand: string;
+    limitedTimeDeal: number;
+  }) => {
+    try {
+      await addFavorite(favorite);
+      // Cập nhật state từ server luôn
+      setFavoritesFromServer((prev) => [...prev, { ...favorite }]);
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  // Lọc sản phẩm theo brand
+  const filteredProducts = selectedBrand
+    ? products.filter((p) => p.brand === selectedBrand)
+    : products;
+
+  return (
+    <SafeAreaView style={styles.container}>
+      {/* Filter Brand */}
+      <View style={styles.brandContainer}>
+        {brands.map((brand) => (
+          <Pressable
+            key={brand}
+            onPress={() =>
+              setSelectedBrand(brand === selectedBrand ? null : brand)
+            }
+            style={[
+              styles.brandButton,
+              { backgroundColor: selectedBrand === brand ? "#e53935" : "#eee" },
+            ]}
+          >
+            <Text
+              style={{
+                color: selectedBrand === brand ? "#fff" : "#333",
+                fontWeight: selectedBrand === brand ? "600" : "500",
+              }}
+            >
+              {brand}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+
+      {/* Product List */}
+      <FlatList
+        data={filteredProducts}
+        keyExtractor={(item) => item.id.toString()}
+        numColumns={2}
+        renderItem={({ item }) => (
+          <View style={styles.card} key={item.id}>
+            <Pressable
+              style={styles.moreBtn}
+              onPress={() => router.push(`/details?id=${item.id}`)}
+            >
+              <MaterialCommunityIcons
+                name="dots-horizontal-circle-outline"
+                size={22}
+                color="#555"
+              />
+            </Pressable>
+            <Pressable
+              style={styles.loveBtn}
+              onPress={() => {
+                if (favoritesFromServer.some((fav) => fav.id === item.id)) {
+                  alert("Exists in favorite list");
+                } else {
+                  chooseFavorite({
+                    id: item.id,
+                    artName: item.artName,
+                    price: item.price,
+                    description: item.description,
+                    image: item.image,
+                    brand: item.brand,
+                    limitedTimeDeal: item.limitedTimeDeal,
+                  });
+                }
+              }}
+            >
+              <MaterialCommunityIcons
+                name="cards-heart-outline"
+                size={24}
+                color={
+                  favoritesFromServer.some((fav) => fav.id === item.id)
+                    ? "red"
+                    : "black"
+                }
+              />
+            </Pressable>
+            <Image source={{ uri: item.image }} style={styles.cardImage} />
+
+            <Text style={styles.cardTitle} numberOfLines={2}>
+              {item.artName}
+            </Text>
+
+            <Text style={styles.cardPrice}>
+              {item.price.toLocaleString("en-US", {
+                style: "currency",
+                currency: "USD",
+              })}
+            </Text>
+
+            {item.limitedTimeDeal > 0 && (
+              <Text style={styles.cardDeal}>
+                -{(item.limitedTimeDeal * 100).toFixed(0)}%
+              </Text>
+            )}
+          </View>
+        )}
+        contentContainerStyle={styles.list}
+      />
+    </SafeAreaView>
+  );
+};
+
+export default HomePage;
 
 const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+  container: {
+    flex: 1,
+    backgroundColor: "#fafafa",
   },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
+  brandContainer: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    margin: 10,
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
+  brandButton: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 16,
+    marginRight: 8,
+    marginBottom: 6,
+  },
+  list: {
+    padding: 10,
+  },
+  card: {
+    flex: 1,
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    margin: 8,
+    padding: 10,
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 3,
+    position: "relative",
+  },
+  cardImage: {
+    width: "100%",
+    aspectRatio: 1,
+    borderRadius: 12,
+    marginBottom: 12,
+    resizeMode: "cover",
+  },
+  cardTitle: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#333",
+    textAlign: "center",
+    marginBottom: 6,
+  },
+  cardPrice: {
+    fontSize: 15,
+    fontWeight: "bold",
+    color: "#e53935",
+    marginBottom: 6,
+  },
+  cardDeal: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#2e7d32",
+    backgroundColor: "#e8f5e9",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    overflow: "hidden",
+  },
+  moreBtn: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+    zIndex: 10,
+  },
+  loveBtn: {
+    position: "absolute",
+    left: 8,
+    top: 8,
+    zIndex: 10,
   },
 });
