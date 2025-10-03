@@ -4,6 +4,7 @@ import {
   Favorite,
   fetchFavorite,
 } from "@/api/favoritesAPI";
+import Search from "@/components/search/component";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useState } from "react";
@@ -21,6 +22,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 const FavoriteList = () => {
   const [Favorites, setFavorites] = useState<Favorite[]>([]);
+  const [searchText, setSearchText] = useState<string>("");
+
   const router = useRouter();
   useFocusEffect(
     useCallback(() => {
@@ -52,6 +55,10 @@ const FavoriteList = () => {
       console.error(error);
     }
   };
+  const filteredFavorites = Favorites.filter((fav) =>
+    fav.artName.toLowerCase().includes(searchText.toLowerCase())
+  );
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.headContainer}>
@@ -67,7 +74,9 @@ const FavoriteList = () => {
           <Text style={styles.removeText}>Remove All</Text>
         </Pressable>
       </View>
-
+      <View style={styles.search}>
+        <Search searchText={searchText} setSearchText={setSearchText} />
+      </View>
       {Favorites.length === 0 ? (
         <View
           style={{ flex: 1, justifyContent: "center", alignItems: "center" }}
@@ -76,7 +85,7 @@ const FavoriteList = () => {
         </View>
       ) : (
         <FlatList
-          data={Favorites}
+          data={filteredFavorites}
           keyExtractor={(item) => item.id.toString()}
           extraData={Favorites}
           renderItem={({ item }) => (
@@ -139,8 +148,11 @@ const styles = StyleSheet.create({
   },
   removeText: {
     fontSize: 20,
-    color: "red",
+    color: "white",
     fontWeight: "medium",
+    backgroundColor: 'red',
+    padding: 8,
+    borderRadius: 8
   },
   title: {
     fontSize: 26,
@@ -211,4 +223,7 @@ const styles = StyleSheet.create({
     right: 8,
     zIndex: 10,
   },
+  search :{
+    marginLeft: 10
+  }
 });
