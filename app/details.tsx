@@ -1,19 +1,66 @@
-import data from "@/data/data.json";
+import { addFavorite, Favorite } from "@/api/favoritesAPI";
+import { fetchProducts, Product } from "@/api/productsAPI";
+import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { useEffect, useState } from "react";
+import {
+  Image,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 
 export default function DetailsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const [favoritesFromServer, setFavoritesFromServer] = useState<Favorite[]>(
+    []
+  );
+  const [product, setProduct] = useState<Product | null>(null);
 
-  const product = data.find((p) => p.id === id);
+  useEffect(() => {
+    const loadProduct = async () => {
+      try {
+        const products = await fetchProducts(); // ✅ fetchProducts() là Promise<Product[]>
+        const found = products.find((p: Product) => p.id === id);
+        setProduct(found || null);
+      } catch (error) {
+        console.error("Lỗi khi tải sản phẩm:", error);
+      }
+    };
+
+    loadProduct();
+  }, [id]);
+  const chooseFavorite = async (favorite: {
+    id: string;
+    artName: string;
+    price: number;
+    description: string;
+    image: string;
+    brand: string;
+    limitedTimeDeal: number;
+  }) => {
+    try {
+      await addFavorite(favorite);
+      // Cập nhật state từ server luôn
+      setFavoritesFromServer((prev) => [...prev, { ...favorite }]);
+    } catch (error) {
+      console.error(error);
+    }
+  };
 
   if (!product) {
     return (
       <View style={styles.overlay}>
         <View style={styles.card}>
           <Text style={styles.title}>Product not exists</Text>
-          <TouchableOpacity style={styles.closeBtn} onPress={() => router.back()}>
+          <TouchableOpacity
+            style={styles.closeBtn}
+            onPress={() => router.back()}
+          >
             <Text style={styles.closeText}>Close</Text>
           </TouchableOpacity>
         </View>
@@ -30,15 +77,45 @@ export default function DetailsScreen() {
     : 0;
 
   // nhóm feedback theo rating
-  const ratingGroups: { rating: number; count: number }[] = [5, 4, 3, 2, 1].map((r) => ({
-    rating: r,
-    count: feedbacks.filter((f) => f.rating === r).length,
-  }));
+  const ratingGroups: { rating: number; count: number }[] = [5, 4, 3, 2, 1].map(
+    (r) => ({
+      rating: r,
+      count: feedbacks.filter((f) => f.rating === r).length,
+    })
+  );
 
   return (
     <View style={styles.overlay}>
       <ScrollView contentContainerStyle={styles.scrollContainer}>
         <View style={styles.card}>
+          <Pressable
+            style={styles.loveBtn}
+            onPress={() => {
+              if (favoritesFromServer.some((fav) => fav.id === product.id)) {
+                alert("Exists in favorite list");
+              } else {
+                chooseFavorite({
+                  id: product.id,
+                  artName: product.artName,
+                  price: product.price,
+                  description: product.description,
+                  image: product.image,
+                  brand: product.brand,
+                  limitedTimeDeal: product.limitedTimeDeal,
+                });
+              }
+            }}
+          >
+            <MaterialCommunityIcons
+              name="cards-heart-outline"
+              size={24}
+              color={
+                favoritesFromServer.some((fav) => fav.id === product.id)
+                  ? "red"
+                  : "black"
+              }
+            />
+          </Pressable>
           {/* Image */}
           <Image source={{ uri: product.image }} style={styles.image} />
 
@@ -51,16 +128,21 @@ export default function DetailsScreen() {
             })}
           </Text>
           {product.limitedTimeDeal > 0 && (
-            <Text style={styles.deal}>-{Math.round(product.limitedTimeDeal * 100)}%</Text>
+            <Text style={styles.deal}>
+              -{Math.round(product.limitedTimeDeal * 100)}%
+            </Text>
           )}
-          <Text style={styles.description}>Description: {product.description}</Text>
+          <Text style={styles.description}>
+            Description: {product.description}
+          </Text>
           <Text style={styles.brand}>Brand: {product.brand}</Text>
 
           {/* Feedback Section */}
           <View style={styles.feedbackSection}>
             <Text style={styles.feedbackTitle}>Feedback</Text>
             <Text style={styles.average}>
-              Average Rating: {averageRating.toFixed(1)} ⭐ ({feedbacks.length} reviews)
+              Average Rating: {averageRating.toFixed(1)} ⭐ ({feedbacks.length}{" "}
+              reviews)
             </Text>
 
             {/* Rating groups */}
@@ -84,7 +166,10 @@ export default function DetailsScreen() {
             ))}
           </View>
 
-          <TouchableOpacity style={styles.closeBtn} onPress={() => router.back()}>
+          <TouchableOpacity
+            style={styles.closeBtn}
+            onPress={() => router.back()}
+          >
             <Text style={styles.closeText}>Close</Text>
           </TouchableOpacity>
         </View>
@@ -94,7 +179,6 @@ export default function DetailsScreen() {
 }
 
 // ...styles giữ nguyên
-
 
 const styles = StyleSheet.create({
   overlay: {
@@ -210,5 +294,11 @@ const styles = StyleSheet.create({
   feedbackDate: {
     fontSize: 12,
     color: "#999",
+  },
+  loveBtn: {
+    position: "absolute",
+    left: 8,
+    top: 8,
+    zIndex: 10,
   },
 });
